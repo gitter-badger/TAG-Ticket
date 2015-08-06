@@ -1,14 +1,17 @@
 package controllers
 
+import java.sql.ResultSet
 import java.util
 import java.util.Date
-import java.sql.ResultSet
+
+import _root_.slick.backend
+import _root_.slick.driver.{PostgresDriver}
+import _root_.slick.jdbc.GetResult
 import play.api.Play.current
-import play.api._
-import play.api.libs.json.Json.JsValueWrapper
-import play.api.mvc._
-import play.api.db._
 import play.api.libs.json._
+import play.api.mvc._
+
+import play.api.libs.concurrent.Execution.Implicits._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Future
@@ -29,17 +32,17 @@ object UserRepository {
     return false;
   };
 
-  def logIn(user: String, password: String): String = {
+  def logIn(user: String, password: String)(dbConfig: backend.DatabaseConfig[PostgresDriver]): String = {
 
     //either the password was changed or the user is not yet in memory
     //Lets get it from the db
-    var conn: java.sql.Connection = DB.getConnection();
+    var sess = dbConfig.db.createSession()
     var pstmt: java.sql.PreparedStatement = null;
     var rs: java.sql.ResultSet = null;
     var newCookie: String = "Not Allowed";
     try {
       var query: String = "Select access_level,last_name,first_name from agent where user_name = ? AND password = ?";
-      pstmt = conn.prepareStatement(query);
+      pstmt = sess.conn.prepareStatement(query);
       pstmt.setString(1, user);
       pstmt.setString(2, password);
       rs = pstmt.executeQuery();
@@ -60,9 +63,7 @@ object UserRepository {
       }
     }
     finally {
-      if (!conn.isClosed()) {
-        conn.close();
-      }
+      sess.close()
       if (pstmt != null && !pstmt.isClosed()) {
         pstmt.close();
       }
@@ -169,7 +170,7 @@ object LoggedInAction extends ActionBuilder[Request] {
 }
 
 
-class Application extends Controller {
+class Application(dbConfig: backend.DatabaseConfig[PostgresDriver]) extends Controller {
 
   def index = Action {
     Ok
@@ -189,7 +190,7 @@ class Application extends Controller {
         val user = (json \ "username").as[String];
         val pwd = (json \ "password").as[String];
         println(user + "  "+pwd);
-        val newCookie = UserRepository.logIn(user, pwd);
+        val newCookie = UserRepository.logIn(user, pwd)(dbConfig)
         println(newCookie);
         if (newCookie.contains("Not Allowed")) {
           Ok(Json.obj(
@@ -216,9 +217,9 @@ class Application extends Controller {
 
   def queryToJson(query: String, rsToJsRow: ResultSet => JsValue): JsArray = {
     var jsonBuffer = ArrayBuffer.empty[JsValue]
-    val conn = DB.getConnection()
+    val sess = dbConfig.db.createSession()
     try {
-      val stmt = conn.createStatement
+      val stmt = sess.conn.createStatement
       val rs = stmt.executeQuery(query)
       while (rs.next()) {
         jsonBuffer += rsToJsRow(rs)
@@ -227,7 +228,7 @@ class Application extends Controller {
       stmt.close()
     }
     finally {
-      conn.close()
+      sess.close()
     }
     JsArray(jsonBuffer)
   }

@@ -14,6 +14,7 @@ libraryDependencies ++= Seq(
 )
 libraryDependencies += "org.flywaydb" % "flyway-core" % "3.2.1"
 libraryDependencies += "org.postgresql" % "postgresql" % "9.4-1200-jdbc4"
+libraryDependencies += "com.typesafe.play" %% "play-slick" % "1.0.0"
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
